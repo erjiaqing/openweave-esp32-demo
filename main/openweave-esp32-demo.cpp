@@ -29,8 +29,14 @@
 #include "esp_heap_caps_init.h"
 #include <new>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include <Weave/DeviceLayer/WeaveDeviceLayer.h>
 #include <Weave/Support/ErrorStr.h>
+
+#include <openthread/openthread-system.h>
+#include <openthread/cli.h>
 
 #include "AliveTimer.h"
 #include "ServiceEcho.h"
@@ -150,6 +156,69 @@ static uint8_t dimStartLevel = 0;
 
 static void DeviceEventHandler(const WeaveDeviceEvent * event, intptr_t arg);
 
+extern "C" void thread_init_task(void * arg)
+{
+    TaskHandle_t *called_task = (TaskHandle_t *) arg;
+    otInstance *instance;
+    WEAVE_ERROR err;
+    
+    ESP_LOGE(TAG, "otSysInit()");
+    otSysInit(0, NULL);
+    ESP_LOGE(TAG, "otSysInit() Done");
+    size_t instanceSize = 0;
+    // Get the instance size.
+    otInstanceInit(NULL, &instanceSize);
+    void *instanceBuffer = malloc(instanceSize);
+
+    instance = otInstanceInit(instanceBuffer, &instanceSize);
+    assert(instance != NULL);
+ 
+    otCliUartInit(instance);
+
+    ESP_LOGI(TAG, "Init OpenThread Stack");
+    err = ThreadStackMgrImpl().InitThreadStack(instance);
+    if (err != WEAVE_NO_ERROR) {
+        ESP_LOGE(TAG, "ThreadStackMgr().InitThreadStack() failed: %s", ErrorStr(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "Starting OpenThread Task");
+    err = ThreadStackMgr().StartThreadTask();
+    if (err != WEAVE_NO_ERROR) {
+        ESP_LOGE(TAG, "ThreadStackMgr().StartThreadStack() failed: %s", ErrorStr(err));
+        return;
+    }
+
+    // Notify main task to continue
+    xTaskNotify(*called_task, ( 1UL ), eSetBits );
+    vTaskDelete(NULL);
+}
+
+void ot_init()
+{
+    TaskHandle_t xHandle = NULL;
+    TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+    BaseType_t res;
+    res = xTaskCreate(thread_init_task,
+                "otinit",
+                13720 / sizeof(StackType_t),
+                &current_task,
+                5,
+                &xHandle);
+    assert(res == pdPASS);
+    
+    // Wait until thread_init_task finish
+    while (true)
+    {
+        uint32_t ulNotifiedValue;
+        xTaskNotifyWait(0x00, ULONG_MAX, &ulNotifiedValue, portMAX_DELAY);
+        if (ulNotifiedValue & 1)
+        {
+            break;
+        }
+    }
+}
+
 extern "C" void app_main()
 {
     WEAVE_ERROR err;    // A quick note about errors: Weave adopts the error type and numbering
@@ -203,6 +272,9 @@ extern "C" void app_main()
         ESP_LOGE(TAG, "PlatformMgr().InitWeaveStack() failed: %s", ErrorStr(err));
         return;
     }
+
+    // OpenThread requires more stacks, create another task to run it.
+    ot_init();
 
     // Configure the Weave Connectivity Manager to automatically enable the WiFi AP interface
     // whenever the WiFi station interface has not be configured.

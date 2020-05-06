@@ -41,6 +41,7 @@ export LWIP_COMPONENT_DIR
 EXTRA_COMPONENT_DIRS    += $(PROJECT_PATH)/third_party/openweave/build/esp32/components \
                            $(PROJECT_PATH)/third_party/ESP32_TFT_library/components \
                            $(PROJECT_PATH)/third_party/QRCode \
+                           $(PROJECT_PATH)/third_party/ot-esp32 \
                            $(LWIP_COMPONENT_DIR)
 
 # The list of ESP-IDF and external software components used by the demo application. 
@@ -87,8 +88,24 @@ COMPONENTS              := app_trace \
                            vfs \
                            wear_levelling \
                            openweave \
+                           ot-esp32 \
                            wpa_supplicant \
                            xtensa-debug-module \
+
+WEAVE_ESP32_DEMO_CFLAGS= \
+    -DLWIP_NETIF_STATUS_CALLBACK=1 \
+    -DLWIP_NETIF_LOOPBACK=1 \
+    -DLWIP_IPV6_FORWARD=1 \
+    -DLWIP_IPV6_NUM_ADDRESSES=6 \
+    -DLWIP_SUPPORT_CUSTOM_PBUF=1 \
+    -DMBEDTLS_ECJPAKE_C \
+    -DMBEDTLS_PLATFORM_MEMORY \
+    -DMBEDTLS_CMAC_C \
+    -DMBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED \
+
+EXTRA_CFLAGS=$(WEAVE_ESP32_DEMO_CFLAGS)
+EXTRA_CXXFLAGS=$(WEAVE_ESP32_DEMO_CFLAGS)
+EXTRA_CPPFLAGS=$(WEAVE_ESP32_DEMO_CFLAGS)
 
 include $(IDF_PATH)/make/project.mk
 

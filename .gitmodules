@@ -10,3 +10,6 @@
 [submodule "third_party/QRCode/QRCode"]
 	path = third_party/QRCode/QRCode
 	url = https://github.com/ricmoo/QRCode.git
+[submodule "third_party/ot-esp32"]
+	path = third_party/ot-esp32
+	url = git@github.com:wgtdkp/ot-esp32-staging.git
